@@ -1,0 +1,76 @@
+#!/bin/sh
+
+root='.'
+
+#get sorted list of files by size
+find $root -type f -exec ls -l {} \; | awk '{print $5,$8}' > .linkdupes.sizes
+sort -rn .linkdupes.sizes > .linkdupes.sizes.sorted
+rm .linkdupes.sizes
+
+#try and detect a duplicate file size
+prevadded=-1
+prevsize=-1
+prevfile=''
+rm -f .linkdupes.sizes.dupes
+cat .linkdupes.sizes.sorted |
+while read line; do
+  size=`echo $line | sed -e 's/ .*//'`
+  file=`echo $line | sed -e 's/.* //'`
+
+  if [ $size -eq $prevsize ]; then
+    if [ $prevadded -eq 0 ]; then
+      echo $prevfile >> .linkdupes.sizes.dupes
+    fi
+    echo $file >> .linkdupes.sizes.dupes
+    prevadded=1
+  else
+    prevadded=0
+  fi
+
+  #prepare for next go-around through the loop
+  prevfile=$file
+  prevsize=$size
+done
+rm -f .linkdupes.sizes.sorted
+
+#get md5sums of all possibly duped files
+rm -f .linkdupes.sums
+cat .linkdupes.sizes.dupes |
+while read line; do
+  md5sum $line >> .linkdupes.sums
+done
+rm -f .linkdupes.sizes.dupes
+
+#sort md5sums file
+sort .linkdupes.sums > .linkdupes.sums.sorted
+rm -f .linkdupes.sums
+
+set -x
+
+#detect duplicated md5sums and link those files
+prevsum=''
+prevduped=-1
+prevfile=''
+master=''
+cat .linkdupes.sums.sorted |
+while read line; do
+  sum=`echo $line | sed -e 's/ .*//'`
+  file=`echo $line | sed -e 's/.* //'`
+  if [ "$sum" = "$prevsum" ]]; then
+    if [ $prevduped -eq 0 ]; then
+      master=$prevfile
+      prevduped=1
+    fi
+    rm $file
+    ln -s $master $file
+  else
+    prevduped=0
+    master=''
+  fi
+
+  prevfile=$file
+  prevsum=$sum
+done
+
+rm -f .linkdupes.sums.sorted
+

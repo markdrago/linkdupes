@@ -45,8 +45,6 @@ rm -f .linkdupes.sizes.dupes
 sort .linkdupes.sums > .linkdupes.sums.sorted
 rm -f .linkdupes.sums
 
-set -x
-
 #detect duplicated md5sums and link those files
 prevsum=''
 prevduped=-1
@@ -62,7 +60,18 @@ while read line; do
       prevduped=1
     fi
     rm $file
-    ln -s $master $file
+
+    file=`echo $file | sed -e 's/^\.\///'`
+    master=`echo $master | sed -e 's/^\.\///'`
+
+    prefix=''
+    sep=''
+    for dir in `echo $file | sed -e 's/\//\n/g'`; do
+      prefix="$sep$prefix"
+      sep='../'
+    done
+
+    ln -s $prefix$master $file
   else
     prevduped=0
     master=''
